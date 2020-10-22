@@ -119,6 +119,7 @@ $ journalctl -f -u kube-scheduler
 #### 5.1 简介
 Calico实现了CNI接口，是kubernetes网络方案的一种选择，它一个纯三层的数据中心网络方案（不需要Overlay），并且与OpenStack、Kubernetes、AWS、GCE等IaaS和容器平台都有良好的集成。
 Calico在每一个计算节点利用Linux Kernel实现了一个高效的vRouter来负责数据转发，而每个vRouter通过BGP协议负责把自己上运行的workload的路由信息像整个Calico网络内传播——小规模部署可以直接互联，大规模下可通过指定的BGP route reflector来完成。 这样保证最终所有的workload之间的数据流量都是通过IP路由的方式完成互联的。
+**calico 会使用hostname进行注册，一定要配置不同的hostname**
 #### 5.2 部署
 **calico是通过系统服务+docker方式完成的**
 ```bash
@@ -126,6 +127,14 @@ $ cp target/all-node/kube-calico.service /lib/systemd/system/
 $ systemctl enable kube-calico.service
 $ service kube-calico start
 $ journalctl -f -u kube-calico
+```
+hostname不能相同，不然会出错，修改后hostname后，原来的节点不会自动删除，需要手动删除，报错信息为：Calico node 'baqcentos7' is already using the IPv4 address 10.244.78.204:
+手动删除命令为,获取列表然后删除
+```bash
+calicoctl get nodes：calico node 列表
+calicoctl delete node xxx: 删除 dead node （通过 hostname）
+calicoctl node run: 在新节点上跑 calico node ，让新的 node 生效 （bgp peer）
+calicoctl node status: 查看状态，确认没有问题
 ```
 #### 5.3 calico可用性验证
 **查看容器运行情况**
@@ -135,6 +144,11 @@ CONTAINER ID   IMAGE                COMMAND        CREATED ...
 4d371b58928b   calico/node:v2.6.2   "start_runit"  3 hours ago...
 ```
 **查看节点运行情况**
+calicoctl 命令找不到的时候需要把kbs的bin文件添加到$PATH里面
+```bash
+#在 vi /etc/profile 的最后一行添加
+export PATH=${PATH}:/usr/bin/kubernetes-bins/
+```
 ```bash
 $ calicoctl node status
 Calico process is running.
