@@ -1,4 +1,7 @@
+
+
 # 二、基础集群部署 - kubernetes-simple
+
 ## 1. 部署ETCD（主节点）
 #### 1.1 简介
 &emsp;&emsp;kubernetes需要存储很多东西，像它本身的节点信息，组件信息，还有通过kubernetes运行的pod，deployment，service等等。都需要持久化。etcd就是它的数据中心。生产环境中为了保证数据中心的高可用和数据的一致性，一般会部署最少三个节点。我们这里以学习为主就只在主节点部署一个实例。
@@ -309,7 +312,56 @@ $ systemctl enable kube-proxy.service
 $ service kube-proxy start
 $ journalctl -f -u kube-proxy
 ```
+##### 9.2.1 启动报错解决方案
+
+```bash
+Failed to execute iptables-restore: exit status 1 (iptables-restore: invalid option -- '5'
+10月 24 15:50:38 server03 kube-proxy[16068]: Try `iptables-restore -h' for more information.
+```
+
+**解决方案为:**
+
+```shell
+# 问题一：kubectl get pods -o wide  查看deployments，显示pods 但是没有集群IP？
+如下：
+NAME                                 READY     STATUS    RESTARTS   AGE       IP              NODE
+kubernates-bootcamp-7fddcf7f-b9s7l   1/1       Running   14         8h        <none>   192.168.2.108
+
+如果创建pods、deploy，会反复出现CrashLoopBackOff 、Running等状态。 出现这种情况是因为  kube-proxy没配置好。参考下面。
+
+问题二： kube-proxy  启动报错 Failed to execute iptables-restore: exit status 1？
+这个问题已有相关文章阐述，但解决方式是 yum remove iptables ,这种方式太暴力，依赖iptables的相关组件太多（包括Docker），执行上述命令后，都会被卸载掉（可以参考：https://cloud.tencent.com/developer/article/1362616）。经多次测试，非常不可取。
+
+本人使用rpm命令方式回滚iptables版本，仅重装iptables和iptables-services即可，缺少的包可以去 ，具体操作如下：
+
+更换iptables的版本号降低到iptables-1.4.21-24.1.el7_5.x86，去http://rpm.pbone.net/ 下载下面两个包：
+# 搜索到的下载地址 https://buildlogs.centos.org/c7.1804.u.x86_64/iptables/20180516080607/1.4.21-24.1.el7_5.x86_64/
+
+iptables-1.4.21-24.1.el7_5.x86_64.rpm
+
+iptables-services-1.4.21-24.1.el7_5.x86_64.rpm
+
+然后非依赖移除iptables与iptables-services，命令参考如下：
+
+rpm -e --nodeps  iptables-1.4.21-33.el7.x86_64
+
+rpm -e --nodeps iptables-services-1.4.21-33.el7.x86_64
+
+再安装上述下载的两个新包：
+
+rpm -ivh iptables-1.4.21-24.1.el7_5.x86_64.rpm
+
+rpm -ivh iptables-services-1.4.21-24.1.el7_5.x86_64.rpm
+
+(也可以将两个包放在同一目录下，执行 rpm -ivh iptables-*.rpm)
+
+重启kube-proxy服务既可以。
+```
+
+
+
 #### 9.3 重点配置说明
+
 **kube-proxy.service**
 > [Unit]  
 Description=Kubernetes Kube-Proxy Server
